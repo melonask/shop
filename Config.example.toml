@@ -1,0 +1,136 @@
+# Shop — Config-driven API backend
+# Copy this to Config.toml and customize for your deployment.
+
+version = 1
+
+# ---------------------------------------------------------------------------
+# Shared: logging
+# ---------------------------------------------------------------------------
+[log]
+level = "info"
+format = "json"        # "json" or "text"
+# file = "/var/log/shop.log"
+
+# ---------------------------------------------------------------------------
+# Shared: runtime
+# ---------------------------------------------------------------------------
+[runtime]
+worker_threads = 4
+shutdown_timeout_secs = 30
+max_payload_bytes = 10_485_760  # 10 MiB
+
+# ---------------------------------------------------------------------------
+# Shared: HTTP server defaults (overridable by [shop.server])
+# ---------------------------------------------------------------------------
+[http]
+bind = "127.0.0.1"
+port = 47296
+prefix = "/v1"
+max_body_bytes = 10_485_760
+# api_key = "sk-..."
+
+# ---------------------------------------------------------------------------
+# Shared: stores
+# ---------------------------------------------------------------------------
+[stores.shop]
+driver = "sqlite"
+url = "sqlite://data/shop.db"
+migrate = true
+
+# ---------------------------------------------------------------------------
+# Shop namespace
+# ---------------------------------------------------------------------------
+[shop]
+enabled = true
+
+[shop.server]
+# bind = "0.0.0.0"
+# port = 8080
+# prefix = "/api/v1"
+
+[shop.challenge]
+secret = "change-me-to-a-cryptographically-random-string-at-least-32-bytes"
+ttl_secs = 600
+cost = 5000
+algorithm = "PBKDF2/SHA-256"
+
+[shop.rates]
+# Static rates (symbol => USD price)
+static_rates = { ETH = 3000.0, USDC = 1.0, USDT = 1.0 }
+# proxy_url = "https://api.example.com/rates"  # Overrides static_rates
+refresh_secs = 60
+
+[shop.storage]
+endpoint = "http://127.0.0.1:9000"
+access_key = "minioadmin"
+secret_key = "minioadmin"
+bucket = "shop-uploads"
+region = "us-east-1"
+# public_base_url = "https://cdn.example.com"
+presigned_expiry_secs = 3600
+
+[shop.idempotency]
+ttl_secs = 86400  # 24 h
+
+[shop.rate_limit]
+capacity = 60      # requests per window
+window_secs = 60   # 1 minute
+
+# ---------------------------------------------------------------------------
+# Task kinds
+# ---------------------------------------------------------------------------
+
+[[shop.kinds]]
+slug = "img.resize"
+name = "Resize Image"
+description = "Resize an image using ImageMagick"
+price_cents = 50
+concurrency = 1
+
+[[shop.kinds.steps]]
+id = "resize"
+command = "convert"
+args = ["input.png", "-resize", "800x600", "output.png"]
+timeout_ms = 60000
+
+[[shop.kinds]]
+slug = "img.analyze"
+name = "Analyze Image"
+description = "Analyze image contents with a CLI tool"
+price_cents = 100
+concurrency = 2
+
+[[shop.kinds.steps]]
+id = "analyze"
+command = "image-analyzer"
+args = ["--input", "input.png"]
+timeout_ms = 120000
+depends_on = []
+
+# ---------------------------------------------------------------------------
+# Companion packages (launched alongside Shop)
+# ---------------------------------------------------------------------------
+
+[shop.packages.ladon]
+enabled = false
+command = "ladon"
+args = []
+inherit_env = true
+restart = true
+restart_delay_secs = 5
+
+[shop.packages.pano]
+enabled = false
+command = "pano"
+args = []
+inherit_env = true
+restart = true
+
+# ---------------------------------------------------------------------------
+# Sibling package sections (tolerated, ignored by Shop)
+# ---------------------------------------------------------------------------
+# [ladon]
+# port = 48081
+#
+# [bria]
+# api_key = "..."
