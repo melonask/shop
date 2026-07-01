@@ -1,0 +1,134 @@
+# Shop E2E test stack
+# Services: RustFS (S3), Anvil (EVM), Solana test validator, Bitcoin regtest
+#
+# Usage:
+#   docker compose -f tests/e2e/docker-compose.yml up -d
+#   docker compose -f tests/e2e/docker-compose.yml down -v
+#   SHOP_E2E=1 cargo test --test e2e -- --ignored
+
+services:
+  # -----------------------------------------------------------------------
+  # RustFS — S3-compatible object storage
+  # -----------------------------------------------------------------------
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: shop-e2e-rustfs
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      RUSTFS_ROOT_USER: rustfsadmin
+      RUSTFS_ROOT_PASSWORD: rustfsadmin
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health/cluster"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # Anvil — local EVM chain (Foundry)
+  # -----------------------------------------------------------------------
+  anvil:
+    image: romangzz/anvil:latest
+    container_name: shop-e2e-anvil
+    ports:
+      - "8545:8545"
+    environment:
+      CHAIN_ID: "31337"
+      BLOCK_TIME: "1"
+      ACCOUNTS: "5"
+      BALANCE: "10000"
+      MNEMONIC: "test test test test test test test test test test test junk"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "--data",
+          '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}',
+          "http://localhost:8545",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # Solana test validator — local Solana cluster
+  # -----------------------------------------------------------------------
+  solana:
+    image: chesterk/solana-test-validator:latest
+    container_name: shop-e2e-solana
+    ports:
+      - "8899:8899"
+      - "8900:8900"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "--data",
+          '{"jsonrpc":"2.0","method":"getHealth","params":[],"id":1}',
+          "http://localhost:8899",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # Bitcoin Core — regtest mode
+  # -----------------------------------------------------------------------
+  bitcoind:
+    image: bitcoin/bitcoin:28.1
+    container_name: shop-e2e-bitcoind
+    ports:
+      - "18443:18443"
+      - "18444:18444"
+    command:
+      - "-regtest=1"
+      - "-server=1"
+      - "-rest=1"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcport=18443"
+      - "-rpcuser=shop"
+      - "-rpcpassword=shoppass"
+      - "-txindex=1"
+      - "-printtoconsole=1"
+      - "-fallbackfee=0.0002"
+    volumes:
+      - bitcoin_data:/home/bitcoin/.bitcoin
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bitcoin-cli",
+          "-regtest",
+          "-rpcuser=shop",
+          "-rpcpassword=shoppass",
+          "-rpcport=18443",
+          "getblockchaininfo",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  rustfs_data:
+  solana_ledger:
+  bitcoin_data:

@@ -227,6 +227,8 @@ pub struct ShopConfig {
     pub kinds: Vec<KindConfig>,
     #[serde(default)]
     pub packages: BTreeMap<String, PackageConfig>,
+    #[serde(default)]
+    pub chains: BTreeMap<String, ChainConfig>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -464,6 +466,34 @@ pub struct PackageConfig {
 
 fn default_restart_delay() -> u64 {
     5
+}
+
+// ---------------------------------------------------------------------------
+// [shop.chains.<name>]
+// ---------------------------------------------------------------------------
+
+/// Configuration for a blockchain chain that Shop tracks deposits for.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ChainConfig {
+    /// RPC URL for the chain.
+    #[serde(default)]
+    pub rpc_url: String,
+    /// Deposit address that users should send funds to.
+    #[serde(default)]
+    pub deposit_address: String,
+    /// The asset symbol (e.g., "ETH", "SOL", "BTC").
+    #[serde(default)]
+    pub asset: String,
+    /// Number of confirmations required before deposit is considered final.
+    #[serde(default = "default_confirmations")]
+    pub confirmations: u32,
+    /// Chain identifier (e.g., 31337 for Anvil, 1 for Ethereum mainnet).
+    #[serde(default)]
+    pub chain_id: u64,
+}
+
+fn default_confirmations() -> u32 {
+    1
 }
 
 // ---------------------------------------------------------------------------

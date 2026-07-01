@@ -31,12 +31,20 @@ pub fn build_router(state: AppState, sc: &ServerConfig) -> axum::Router {
             axum::routing::get(challenge_handler),
         )
         .route(
+            &format!("{prefix}/chains"),
+            axum::routing::get(chains_handler),
+        )
+        .route(
             &format!("{prefix}/spaces"),
             axum::routing::post(create_space_handler).get(list_spaces_handler),
         )
         .route(
             &format!("{prefix}/spaces/{{sid}}"),
             axum::routing::get(get_space_handler),
+        )
+        .route(
+            &format!("{prefix}/spaces/{{sid}}/deposits"),
+            axum::routing::post(record_deposit_handler),
         )
         .route(
             &format!("{prefix}/rates"),
@@ -634,6 +642,91 @@ async fn task_events_handler(
             .interval(std::time::Duration::from_secs(15))
             .text("keep-alive"),
     ))
+}
+
+// ---------------------------------------------------------------------------
+// GET /chains
+// ---------------------------------------------------------------------------
+
+async fn chains_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse> {
+    let key = client_ip_key(&headers);
+    if !state.rate_limiter.check(&key).await {
+        return Err(ShopError::TooManyRequests("rate limit exceeded".into()));
+    }
+
+    let chains: Vec<serde_json::Value> = state
+        .config
+        .shop
+        .chains
+        .iter()
+        .map(|(name, chain)| {
+            serde_json::json!({
+                "name": name,
+                "asset": chain.asset,
+                "deposit_address": chain.deposit_address,
+                "chain_id": chain.chain_id,
+                "confirmations": chain.confirmations,
+            })
+        })
+        .collect();
+
+    let mut resp_headers = HeaderMap::new();
+    set_request_id(&mut resp_headers);
+    Ok((resp_headers, Json(serde_json::json!({ "chains": chains }))))
+}
+
+// ---------------------------------------------------------------------------
+// POST /spaces/:sid/deposits
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct RecordDepositRequest {
+    chain: String,
+    address: String,
+    asset: String,
+    amount: String,
+    #[serde(default)]
+    tx_hash: String,
+}
+
+async fn record_deposit_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(sid): Path<String>,
+    Json(body): Json<RecordDepositRequest>,
+) -> Result<impl IntoResponse> {
+    let key = client_ip_key(&headers);
+    if !state.rate_limiter.check(&key).await {
+        return Err(ShopError::TooManyRequests("rate limit exceeded".into()));
+    }
+
+    if sid.len() != 24 || !sid.chars().all(|c| c.is_ascii_digit()) {
+        return Err(ShopError::BadRequest("invalid sid format".into()));
+    }
+
+    // Verify the space exists
+    let _space = state
+        .get_space(&sid)
+        .await?
+        .ok_or_else(|| ShopError::NotFound(format!("space {sid} not found")))?;
+
+    let deposit = state
+        .record_deposit(
+            &sid,
+            &body.chain,
+            &body.address,
+            &body.asset,
+            &body.amount,
+            &body.tx_hash,
+        )
+        .await?;
+
+    let mut resp_headers = HeaderMap::new();
+    set_request_id(&mut resp_headers);
+    Ok((StatusCode::CREATED, resp_headers, Json(deposit)))
 }
 
 // ---------------------------------------------------------------------------

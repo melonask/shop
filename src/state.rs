@@ -273,6 +273,38 @@ impl AppState {
         Ok(deposits)
     }
 
+    /// Record a deposit for a space.
+    pub async fn record_deposit(
+        &self,
+        sid: &str,
+        chain: &str,
+        address: &str,
+        asset: &str,
+        amount: &str,
+        tx_hash: &str,
+    ) -> Result<Deposit> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let db = self.db.lock().await;
+        db.execute(
+            "INSERT INTO deposits (sid, chain, address, asset, amount, tx_hash, status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'confirmed', ?7, ?8)",
+            rusqlite::params![sid, chain, address, asset, amount, tx_hash, now, now],
+        )?;
+        let id = db.last_insert_rowid();
+        Ok(Deposit {
+            id,
+            sid: sid.to_string(),
+            chain: chain.to_string(),
+            address: address.to_string(),
+            asset: asset.to_string(),
+            amount: amount.to_string(),
+            tx_hash: tx_hash.to_string(),
+            status: "confirmed".to_string(),
+            created_at: now.clone(),
+            updated_at: now,
+        })
+    }
+
     /// Get balances for a space.
     pub async fn get_balances(&self, sid: &str) -> Result<Vec<Balance>> {
         let db = self.db.lock().await;

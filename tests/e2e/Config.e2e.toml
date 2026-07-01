@@ -1,0 +1,100 @@
+# Shop E2E test configuration
+# Uses local Docker services from tests/e2e/docker-compose.yml
+version = 1
+
+[log]
+level = "info"
+format = "text"
+
+[runtime]
+worker_threads = 2
+shutdown_timeout_secs = 10
+
+[http]
+bind = "127.0.0.1"
+port = 47299
+prefix = "/v1"
+
+[stores.shop]
+driver = "sqlite"
+url = "sqlite://tests/e2e/shop-e2e.db"
+
+# ---------------------------------------------------------------------------
+# Shop namespace
+# ---------------------------------------------------------------------------
+[shop]
+enabled = true
+
+[shop.challenge]
+secret = "e2e-test-secret-key-must-be-long-enough-32"
+ttl_secs = 600
+cost = 0  # Disable PoW for e2e tests
+
+[shop.rates]
+static_rates = { ETH = 3000.0, USDC = 1.0, SOL = 150.0, BTC = 65000.0 }
+
+[shop.storage]
+endpoint = "http://127.0.0.1:9000"
+access_key = "rustfsadmin"
+secret_key = "rustfsadmin"
+bucket = "shop-e2e-uploads"
+region = "us-east-1"
+public_base_url = "http://127.0.0.1:9000/shop-e2e-uploads"
+presigned_expiry_secs = 3600
+
+[shop.idempotency]
+ttl_secs = 86400
+
+[shop.rate_limit]
+capacity = 1000
+window_secs = 60
+
+# ---------------------------------------------------------------------------
+# Chain configurations for deposit tracking
+# ---------------------------------------------------------------------------
+
+[shop.chains.anvil]
+rpc_url = "http://127.0.0.1:8545"
+# Account #0 from mnemonic "test test test test test test test test test test test junk"
+deposit_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+asset = "ETH"
+chain_id = 31337
+confirmations = 1
+
+[shop.chains.solana]
+rpc_url = "http://127.0.0.1:8899"
+# Default funded account from solana-test-validator
+deposit_address = "C3HMGc8AQxY3N5z8KCB2cmcYrPmDKnG7dHoXcH3T4mJh"
+asset = "SOL"
+chain_id = 0
+confirmations = 1
+
+[shop.chains.bitcoin]
+rpc_url = "http://shop:shoppass@127.0.0.1:18443"
+# Generated test address
+deposit_address = "bcrt1qtestdepositaddresssimulated1"
+asset = "BTC"
+chain_id = 0
+confirmations = 1
+
+# ---------------------------------------------------------------------------
+# Task kinds
+# ---------------------------------------------------------------------------
+
+[[shop.kinds]]
+slug = "process.file"
+name = "Process File"
+description = "Transform an uploaded file and return metadata"
+price_cents = 0
+concurrency = 1
+
+[[shop.kinds.steps]]
+id = "transform"
+command = "bash"
+args = ["tests/e2e/scripts/task-processor.sh"]
+timeout_ms = 30000
+inherit_env = true
+
+# ---------------------------------------------------------------------------
+# Packages (none enabled for e2e)
+# ---------------------------------------------------------------------------

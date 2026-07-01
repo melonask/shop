@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Format check
+  # -----------------------------------------------------------------------
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
+  # -----------------------------------------------------------------------
+  # Clippy
+  # -----------------------------------------------------------------------
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --tests --examples -- -D warnings
+
+  # -----------------------------------------------------------------------
+  # Unit tests
+  # -----------------------------------------------------------------------
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test
+
+  # -----------------------------------------------------------------------
+  # E2E tests (manual trigger only — requires Docker)
+  # -----------------------------------------------------------------------
+  e2e:
+    name: e2e tests (docker)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Start Docker services
+        run: |
+          docker compose -f tests/e2e/docker-compose.yml up -d
+          # Wait for services
+          for i in $(seq 1 60); do
+            if docker compose -f tests/e2e/docker-compose.yml ps | grep -q "healthy"; then
+              echo "All services healthy"
+              break
+            fi
+            sleep 5
+          done
+          docker compose -f tests/e2e/docker-compose.yml ps
+
+      - name: Build shop binary
+        run: cargo build --bin shop
+
+      - name: Run e2e tests
+        run: SHOP_E2E=1 cargo test --test e2e -- --ignored --nocapture
+        timeout-minutes: 15
+
+      - name: Collect Docker logs on failure
+        if: failure()
+        run: docker compose -f tests/e2e/docker-compose.yml logs
+
+      - name: Stop Docker services
+        if: always()
+        run: docker compose -f tests/e2e/docker-compose.yml down -v

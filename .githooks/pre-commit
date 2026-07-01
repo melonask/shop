@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Shop pre-commit hook — runs fmt, clippy, and unit tests.
+# Install via: bash scripts/install-git-hooks.sh
+
+set -euo pipefail
+
+echo "=== cargo fmt --check ==="
+cargo fmt --check
+
+echo ""
+echo "=== cargo clippy --tests --examples -- -D warnings ==="
+cargo clippy --tests --examples -- -D warnings
+
+echo ""
+echo "=== cargo test ==="
+cargo test
+
+echo ""
+echo "=== All checks passed ==="

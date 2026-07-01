@@ -1,1 +1,3 @@
 target
+tests/e2e/shop-e2e*.db
+tests/e2e/shop-e2e*.db-*

@@ -1,0 +1,5 @@
+Hello, Shop E2E Test!
+This file is used as a test fixture for the upload and task processing workflow.
+Line 3 with some text.
+Line 4 with more content.
+Line 5 — end of fixture.
