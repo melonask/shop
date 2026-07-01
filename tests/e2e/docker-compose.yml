@@ -87,13 +87,15 @@ services:
       test:
         [
           "CMD",
-          "sh",
-          "-c",
-          "curl -sf -X POST -H 'Content-Type: application/json' --data '{\"jsonrpc\":\"2.0\",\"method\":\"getHealth\",\"params\":[],\"id\":1}' http://localhost:8899 | grep -q ok",
+          "solana",
+          "cluster-version",
+          "--url",
+          "http://localhost:8899",
         ]
       interval: 10s
-      timeout: 10s
+      timeout: 15s
       retries: 40
+      start_period: 20s
     restart: unless-stopped
 
   # -----------------------------------------------------------------------
