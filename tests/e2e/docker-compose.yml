@@ -2,9 +2,9 @@
 # Services: RustFS (S3), Anvil (EVM), Solana test validator, Bitcoin regtest
 #
 # Usage:
-#   docker compose -f tests/e2e/docker-compose.yml up -d
+#   docker compose -f tests/e2e/docker-compose.yml up -d --wait
 #   docker compose -f tests/e2e/docker-compose.yml down -v
-#   SHOP_E2E=1 cargo test --test e2e -- --ignored
+#   SHOP_E2E=1 cargo test --test e2e -- --ignored --nocapture --test-threads=1
 
 services:
   # -----------------------------------------------------------------------
@@ -22,43 +22,56 @@ services:
     volumes:
       - rustfs_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health/cluster"]
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -sf http://localhost:9000/health/cluster || curl -sf -o /dev/null -w '%{http_code}' http://localhost:9000 | grep -qE '^(200|403)'",
+        ]
       interval: 5s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 20
     restart: unless-stopped
 
   # -----------------------------------------------------------------------
   # Anvil — local EVM chain (Foundry)
   # -----------------------------------------------------------------------
   anvil:
-    image: romangzz/anvil:latest
+    image: ghcr.io/foundry-rs/foundry:latest
+    platform: linux/amd64
     container_name: shop-e2e-anvil
     ports:
       - "8545:8545"
-    environment:
-      CHAIN_ID: "31337"
-      BLOCK_TIME: "1"
-      ACCOUNTS: "5"
-      BALANCE: "10000"
-      MNEMONIC: "test test test test test test test test test test test junk"
+    entrypoint: ["anvil"]
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8545"
+      - "--chain-id"
+      - "31337"
+      - "--block-time"
+      - "1"
+      - "--accounts"
+      - "5"
+      - "--balance"
+      - "10000"
+      - "--mnemonic"
+      - "test test test test test test test test test test test junk"
     healthcheck:
       test:
         [
           "CMD",
-          "curl",
-          "-s",
-          "-X",
-          "POST",
-          "-H",
-          "Content-Type: application/json",
-          "--data",
-          '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}',
+          "cast",
+          "block-number",
+          "--rpc-url",
           "http://localhost:8545",
         ]
       interval: 3s
-      timeout: 3s
-      retries: 20
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     restart: unless-stopped
 
   # -----------------------------------------------------------------------
@@ -74,19 +87,13 @@ services:
       test:
         [
           "CMD",
-          "curl",
-          "-s",
-          "-X",
-          "POST",
-          "-H",
-          "Content-Type: application/json",
-          "--data",
-          '{"jsonrpc":"2.0","method":"getHealth","params":[],"id":1}',
-          "http://localhost:8899",
+          "sh",
+          "-c",
+          "curl -sf -X POST -H 'Content-Type: application/json' --data '{\"jsonrpc\":\"2.0\",\"method\":\"getHealth\",\"params\":[],\"id\":1}' http://localhost:8899 | grep -q ok",
         ]
       interval: 10s
       timeout: 10s
-      retries: 30
+      retries: 40
     restart: unless-stopped
 
   # -----------------------------------------------------------------------
@@ -130,5 +137,4 @@ services:
 
 volumes:
   rustfs_data:
-  solana_ledger:
   bitcoin_data:
