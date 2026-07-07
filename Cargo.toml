@@ -7,7 +7,10 @@ authors = ["Shop maintainers"]
 description = "Config-driven API backend with spaces, tasks, uploads, and package orchestration"
 license = "MIT"
 repository = "https://github.com/melonask/shop"
+homepage = "https://github.com/melonask/shop"
 readme = "README.md"
+keywords = ["api", "backend", "tasks", "uploads", "sqlite"]
+categories = ["command-line-utilities", "web-programming::http-server"]
 
 [[bin]]
 name = "shop"

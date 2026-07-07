@@ -123,6 +123,15 @@ cargo fmt --check
 cargo clippy --tests --examples -- -D warnings
 ```
 
+### Publishing
+
+Publishing to crates.io is handled by GitHub Actions when a GitHub Release is published, or manually from the `Publish` workflow.
+
+Required repository secret:
+- `CARGO_REGISTRY_TOKEN` — crates.io API token with publish permission for this crate.
+
+The workflow runs `cargo publish --dry-run --locked` before uploading the crate.
+
 ### Pre-commit Hook
 
 ```bash
