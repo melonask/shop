@@ -3,11 +3,14 @@ name: Publish
 on:
   release:
     types: [published]
+  schedule:
+    - cron: "45 7 * * *"
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+  CRATE_NAME_REUSE_AFTER: "2026-07-07T07:37:02Z"
 
 jobs:
   publish:
@@ -22,10 +25,45 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Check publish eligibility
+        id: eligibility
+        shell: bash
+        run: |
+          pkgid="$(cargo pkgid)"
+          package="${pkgid##*#}"
+          crate_name="${package%@*}"
+          crate_version="${package##*@}"
+
+          now="$(date -u +%s)"
+          reuse_after="$(date -u -d "$CRATE_NAME_REUSE_AFTER" +%s)"
+          if [ "$now" -lt "$reuse_after" ]; then
+            echo "Crate name reuse is not available until $CRATE_NAME_REUSE_AFTER. Skipping."
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          status="$(curl -sS -o /tmp/crate-version.json -w "%{http_code}" "https://crates.io/api/v1/crates/${crate_name}/${crate_version}")"
+          if [ "$status" = "200" ]; then
+            echo "${crate_name} ${crate_version} is already published. Skipping."
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$status" != "404" ]; then
+            echo "Unexpected crates.io response while checking ${crate_name} ${crate_version}: HTTP ${status}" >&2
+            cat /tmp/crate-version.json >&2
+            exit 1
+          fi
+
+          echo "${crate_name} ${crate_version} is eligible for publishing."
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+
       - name: Verify package
+        if: steps.eligibility.outputs.should_publish == 'true'
         run: cargo publish --dry-run --locked
 
       - name: Publish to crates.io
-        run: cargo publish --locked --token "$CARGO_REGISTRY_TOKEN"
+        if: steps.eligibility.outputs.should_publish == 'true'
+        run: cargo publish --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
